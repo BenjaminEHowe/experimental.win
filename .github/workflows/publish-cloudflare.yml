@@ -7,32 +7,33 @@ env:
   JEKYLL_ARTIFACT_NAME: 'jekyll-build'
   JEKYLL_DIR: 'jekyll'
   JEKYLL_BUILD_DIR: '_site'
+  WORKER_DIR: 'worker'
 
 jobs:
   build-jekyll:
     runs-on: 'ubuntu-latest'
     name: 'Build Jekyll Site'
     steps:
-      - name: 'Checkout'
-        uses: 'actions/checkout@v3'
-      - name: 'Cache Jekyll Gems'
-        uses: 'actions/cache@v2'
-        with:
-          path: "${{ env.JEKYLL_DIR }}/vendor/bundle"
-          key: "${{ runner.os }}-gems-${{ hashFiles('**/Gemfile') }}"
-          restore-keys: |
-            "${{ runner.os }}-gems-"
-      - name: 'Build Jekyll Site'
-        uses: 'helaili/jekyll-action@v2'
-        with:
-          build_only: true
-          jekyll_build_options: "-d ${{ env.JEKYLL_BUILD_DIR }}"
-          jekyll_src: ${{ env.JEKYLL_DIR }}
-      - name: 'Upload Jekyll Build Artifact'
-        uses: 'actions/upload-artifact@v3'
-        with:
-          name: ${{ env.JEKYLL_ARTIFACT_NAME }}
-          path: "${{ env.JEKYLL_DIR }}/${{ env.JEKYLL_BUILD_DIR }}"
+    - name: 'Checkout'
+      uses: 'actions/checkout@v3'
+    - name: 'Cache Jekyll Gems'
+      uses: 'actions/cache@v2'
+      with:
+        path: "${{ env.JEKYLL_DIR }}/vendor/bundle"
+        key: "${{ runner.os }}-gems-${{ hashFiles('**/Gemfile') }}"
+        restore-keys: |
+          "${{ runner.os }}-gems-"
+    - name: 'Build Jekyll Site'
+      uses: 'helaili/jekyll-action@v2'
+      with:
+        build_only: true
+        jekyll_build_options: "-d ${{ env.JEKYLL_BUILD_DIR }}"
+        jekyll_src: ${{ env.JEKYLL_DIR }}
+    - name: 'Upload Jekyll Build Artifact'
+      uses: 'actions/upload-artifact@v3'
+      with:
+        name: ${{ env.JEKYLL_ARTIFACT_NAME }}
+        path: "${{ env.JEKYLL_DIR }}/${{ env.JEKYLL_BUILD_DIR }}"
   publish-pages:
     needs: 'build-jekyll'
     runs-on: 'ubuntu-latest'
@@ -41,15 +42,44 @@ jobs:
       deployments: 'write'
     name: 'Publish Jekyll Site to Cloudflare Pages'
     steps:
-      - name: 'Download Jekyll Build Artifact'
-        uses: 'actions/download-artifact@v3'
-        with:
-          name: ${{ env.JEKYLL_ARTIFACT_NAME }}
-      - name: 'Publish to Cloudflare Pages'
-        uses: 'cloudflare/pages-action@1'
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: 'ae2e2411fc6462d1dd8edf4182094548'
-          projectName: 'experimental-win'
-          directory: '.'
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+    - name: 'Download Jekyll Build Artifact'
+      uses: 'actions/download-artifact@v3'
+      with:
+        name: ${{ env.JEKYLL_ARTIFACT_NAME }}
+    - name: 'Publish to Cloudflare Pages'
+      uses: 'cloudflare/pages-action@1'
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        accountId: 'ae2e2411fc6462d1dd8edf4182094548'
+        projectName: 'experimental-win'
+        directory: '.'
+        gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+  publish-worker:
+    runs-on: 'ubuntu-latest'
+    name: 'Publish Worker to Cloudflare'
+    steps:
+    - name: 'Checkout'
+      uses: 'actions/checkout@v3'
+    - name: 'Install rust toolchain'
+      uses: 'actions-rs/toolchain@v1'
+      with:
+        toolchain: 'stable'
+        target: 'wasm32-unknown-unknown'
+        override: true
+    - name: 'Install worker-build'
+      uses: 'actions-rs/cargo@v1'
+      with:
+        command: 'install'
+        args: 'worker-build'
+    - name: 'Run worker-build'
+      working-directory: ${{ env.WORKER_DIR }}
+      run: 'worker-build --release'
+    - name: 'Check file paths'
+      working-directory: ${{ env.WORKER_DIR }}
+      run: 'ls -lahR'
+    - name: 'Publish to Cloudflare'
+      uses: 'cloudflare/wrangler-action@2.0.0'
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        workingDirectory: ${{ env.WORKER_DIR }}
+        command: 'publish'

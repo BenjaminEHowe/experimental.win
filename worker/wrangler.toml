@@ -1,0 +1,11 @@
+name = "experimental-win-worker-rust"
+account_id = "ae2e2411fc6462d1dd8edf4182094548"
+workers_dev = true
+compatibility_date = "2022-05-15"
+main = "build/worker/shim.mjs"
+
+[vars]
+WORKERS_RS_VERSION = "0.0.9"
+
+[build]
+command = "true" # "cargo install -q worker-build && worker-build --release"
